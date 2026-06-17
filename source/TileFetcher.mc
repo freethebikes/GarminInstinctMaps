@@ -15,6 +15,7 @@ import Toybox.WatchUi;
 class TileFetcher {
 
     var mEnabled;     // false when SERVER_URL is empty (bundled-only build)
+    var mStatic;      // true = fetch static files, false = dynamic dev server
     var mOnFetched;   // method(key, tile) called when a passive fetch succeeds
     var mPending;     // "ix_iy" => time(ms) of last attempt (throttle/dedupe)
 
@@ -28,6 +29,7 @@ class TileFetcher {
 
     function initialize(onFetched as Method) {
         mEnabled = !Config.SERVER_URL.equals("");
+        mStatic = Config.STATIC_TILES;
         mOnFetched = onFetched;
         mPending = {};
         mQueue = [];
@@ -63,14 +65,24 @@ class TileFetcher {
             return;
         }
         mPending.put(key, now);
-        Communications.makeWebRequest(
-            Config.SERVER_URL + "/tile",
-            { "ix" => ix, "iy" => iy },
-            {
-                :method => Communications.HTTP_REQUEST_METHOD_GET,
-                :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
-            },
-            method(:onResponse));
+        requestTile(ix, iy, method(:onResponse));
+    }
+
+    // Issues the tile web request in whichever URL form is configured.
+    function requestTile(ix as Number, iy as Number, cb as Method) as Void {
+        var url;
+        var params;
+        if (mStatic) {
+            url = Config.SERVER_URL + "/tile_" + ix + "_" + iy + ".json";
+            params = {};
+        } else {
+            url = Config.SERVER_URL + "/tile";
+            params = { "ix" => ix, "iy" => iy };
+        }
+        Communications.makeWebRequest(url, params, {
+            :method => Communications.HTTP_REQUEST_METHOD_GET,
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+        }, cb);
     }
 
     // makeWebRequest callback. We don't know ix/iy here directly, so the tile
@@ -122,14 +134,7 @@ class TileFetcher {
                 mDownDone += 1;          // already have it (or can't fetch)
                 continue;
             }
-            Communications.makeWebRequest(
-                Config.SERVER_URL + "/tile",
-                { "ix" => pair[0], "iy" => pair[1] },
-                {
-                    :method => Communications.HTTP_REQUEST_METHOD_GET,
-                    :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
-                },
-                method(:onPrefetchResponse));
+            requestTile(pair[0], pair[1], method(:onPrefetchResponse));
             notifyProgress(false);
             return;
         }

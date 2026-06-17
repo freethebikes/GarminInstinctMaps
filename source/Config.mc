@@ -4,11 +4,16 @@ import Toybox.Lang;
 module Config {
     const APP_VERSION = "1.0";
 
-    // Tile server URL. Empty string = fetching disabled (bundled tiles only),
-    // which is how the store build ships. To enable on-demand fetching, set a
-    // public HTTPS URL the phone can reach.
-    //   Simulator testing: "http://127.0.0.1:8088"
-    const SERVER_URL = "";
+    // Tile source URL. Empty string = fetching disabled (bundled tiles only).
+    // For static hosting (GitHub Pages), this is the folder holding the tile
+    // files; for the dynamic dev server it's the server root.
+    //   Static (Pages): "https://<user>.github.io/<repo>/site/tiles"
+    //   Dynamic dev server: "http://127.0.0.1:8088"  (set STATIC_TILES = false)
+    const SERVER_URL = "https://freethebikes.github.io/GarminInstinctMaps/site/tiles";
+
+    // true  -> request static files:  <SERVER_URL>/tile_<ix>_<iy>.json
+    // false -> dynamic dev server:    <SERVER_URL>/tile?ix=&iy=
+    const STATIC_TILES = true;
 
     // Max number of fetched tiles kept in Application.Storage (LRU evicted).
     const CACHE_CAP = 30;

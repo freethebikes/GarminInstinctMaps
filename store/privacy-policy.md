@@ -13,11 +13,13 @@ off the device, sent to us or to any third party, or used for any other purpose.
 
 ## Network use
 
-CrudeMaps includes an optional map-download feature that can fetch additional
-map tiles over the internet (relayed through your phone). **This feature is
-turned off in this release**, so the app makes no network connections at all.
-Even when the feature is enabled, only map-tile requests are made — your
-location and any personal data are never transmitted.
+CrudeMaps can download additional map tiles over the internet (relayed through
+your phone) to extend coverage, and caches them on your device for offline use.
+Only requests for public map tiles are made — your location and any personal
+data are never transmitted. The tiles are static, OpenStreetMap-derived files
+served from a content host; no information about you is sent with the request
+beyond what any web request includes (e.g. your device's IP address, which the
+host may log).
 
 ## Data we collect
 
