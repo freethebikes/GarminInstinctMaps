@@ -1,0 +1,9 @@
+{
+  "lat0": 33.9,
+  "lon0": -119.95,
+  "tile_deg": 0.05,
+  "scale": 100000,
+  "roads": "motorway|trunk",
+  "simplify_m": 50.0,
+  "max_labels": 12
+}

@@ -1,0 +1,3 @@
+# CrudeMaps build configuration.
+# Sources default to source/ and resources default to resources/ via the SDK base jungle.
+project.manifest = manifest.xml

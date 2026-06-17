@@ -1,0 +1,15 @@
+# Build output (regenerable via build.sh)
+bin/
+*.prg
+*.iq
+*.prg.debug.xml
+
+# Generator caches (regenerable; large)
+tools/.overpass_cache/
+tools/server_cache/
+
+# Local Claude Code / editor config
+.claude/
+
+# OS cruft
+.DS_Store
