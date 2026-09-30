@@ -1,4 +1,4 @@
-# CrudeMaps — vector maps for the Garmin Instinct 2
+# Simple Offline Maps — vector maps for the Garmin Instinct 2
 
 A Connect IQ watch app that renders crude vector maps (coastlines / outlines) by
 drawing polylines relative to the current GPS position. The Instinct 2 has no

@@ -188,7 +188,7 @@ class MapView extends WatchUi.View {
     // Opened by holding ENTER on the map.
     function openMenu() as Void {
         endHold();
-        var menu = new WatchUi.Menu2({ :title => "CrudeMaps" });
+        var menu = new WatchUi.Menu2({ :title => WatchUi.loadResource(Rez.Strings.AppName) as String });
         menu.addItem(new WatchUi.MenuItem("Regions", "jump to a place", :regions, {}));
         if (mStore.fetchEnabled()) {
             menu.addItem(new WatchUi.MenuItem("Download area", "tiles near here", :download, {}));

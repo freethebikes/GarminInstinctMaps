@@ -18,8 +18,14 @@ class AboutView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
 
         var cx = w / 2;
-        dc.drawText(cx, h * 0.20, Graphics.FONT_SMALL, "CrudeMaps",
-            Graphics.TEXT_JUSTIFY_CENTER);
+        // The full name is too wide for FONT_SMALL near the top of the round
+        // screen, so drop to a smaller font when it doesn't fit.
+        var name = WatchUi.loadResource(Rez.Strings.AppName) as String;
+        var font = Graphics.FONT_SMALL;
+        if (dc.getTextWidthInPixels(name, font) > w * 0.75) {
+            font = Graphics.FONT_XTINY;
+        }
+        dc.drawText(cx, h * 0.20, font, name, Graphics.TEXT_JUSTIFY_CENTER);
         dc.drawText(cx, h * 0.36, Graphics.FONT_XTINY, "v" + Config.APP_VERSION,
             Graphics.TEXT_JUSTIFY_CENTER);
         dc.drawText(cx, h * 0.52, Graphics.FONT_XTINY, "Map data",

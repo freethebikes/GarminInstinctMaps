@@ -1,6 +1,6 @@
-# Connect IQ Store listing — CrudeMaps
+# Connect IQ Store listing — Simple Offline Maps
 
-**App name:** CrudeMaps
+**App name:** Simple Offline Maps
 
 **Short description (one line):**
 Simple offline vector maps for the Instinct — see the coastline, water and
@@ -12,7 +12,7 @@ major roads around your GPS position.
 
 **Full description:**
 
-The Garmin Instinct has excellent GPS but no built-in maps. CrudeMaps fills that
+The Garmin Instinct has excellent GPS but no built-in maps. Simple Offline Maps fills that
 gap with lightweight vector maps: it draws coastlines, water and major roads as
 crisp lines around your live GPS position, so you can see where you are in
 relation to the landscape — entirely offline.
@@ -33,7 +33,7 @@ Controls
 - CTRL — switch tilt / pan
 - SET — recenter on your position
 
-Please note: CrudeMaps shows deliberately simplified ("crude") outlines as a
+Please note: Simple Offline Maps shows deliberately simplified outlines as a
 lightweight orientation aid — it is not a full street map and does not provide
 turn-by-turn navigation.
 

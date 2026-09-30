@@ -1,4 +1,4 @@
-# Publishing CrudeMaps to the Connect IQ Store
+# Publishing Simple Offline Maps to the Connect IQ Store
 
 ## What's done (in this repo)
 
@@ -51,7 +51,7 @@
 1. `./build.sh` to produce `bin/CrudeMaps.prg`.
 2. Connect the watch by USB; it mounts as a drive.
 3. Copy `bin/CrudeMaps.prg` into the watch's `GARMIN/APPS/` folder.
-4. Eject, and find CrudeMaps in the watch's activity/app list.
+4. Eject, and find Simple Offline Maps in the watch's activity/app list.
 
 ## Re-enabling fetch later (optional)
 

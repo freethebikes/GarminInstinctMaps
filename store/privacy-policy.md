@@ -1,19 +1,19 @@
-# CrudeMaps — Privacy Policy
+# Simple Offline Maps — Privacy Policy
 
 _Last updated: 16 June 2026_
 
-CrudeMaps is designed to respect your privacy. In short: it does not collect,
+Simple Offline Maps is designed to respect your privacy. In short: it does not collect,
 store off your device, or transmit any personal information.
 
 ## Location
 
-CrudeMaps reads your GPS location from your Garmin device **only** to show your
+Simple Offline Maps reads your GPS location from your Garmin device **only** to show your
 current position on the map, on the watch itself. Your location is never saved
 off the device, sent to us or to any third party, or used for any other purpose.
 
 ## Network use
 
-CrudeMaps can download additional map tiles over the internet (relayed through
+Simple Offline Maps can download additional map tiles over the internet (relayed through
 your phone) to extend coverage, and caches them on your device for offline use.
 Only requests for public map tiles are made — your location and any personal
 data are never transmitted. The tiles are static, OpenStreetMap-derived files
@@ -23,7 +23,7 @@ host may log).
 
 ## Data we collect
 
-None. CrudeMaps has no analytics, no accounts, and no servers that receive your
+None. Simple Offline Maps has no analytics, no accounts, and no servers that receive your
 data. Map data is bundled with the app and derived from OpenStreetMap
 (© OpenStreetMap contributors, ODbL).
 
