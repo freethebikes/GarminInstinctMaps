@@ -7,6 +7,10 @@ bin/
 # Generator caches (regenerable; large)
 tools/.overpass_cache/
 tools/server_cache/
+# OSM .pbf extracts, gen_static.py output, pyosmium venv
+tools/osm/
+tools/static_out/
+tools/.venv/
 
 # Local Claude Code / editor config
 .claude/

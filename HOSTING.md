@@ -19,7 +19,36 @@ Free, automatic HTTPS at `https://<user>.github.io/<repo>/`, trivial to deploy.
 (Cloudflare Pages is the upgrade if bandwidth ever grows — unlimited bandwidth,
 same static model.)
 
-## Pipeline
+## Bulk pipeline: a whole state from an OSM extract
+
+For anything bigger than a town, skip Overpass and read a Geofabrik `.pbf`
+extract directly with `tools/gen_static.py`. It streams the file (memory scales
+with the output, not the raw OSM data) and writes `tile_<ix>_<iy>.json` files on
+the shared world grid (`GRID_LAT0/GRID_LON0` in `gen_tiles.py`), using the
+simplify/roads/labels settings from `grid.json`.
+
+```bash
+python3 -m venv tools/.venv && tools/.venv/bin/pip install osmium   # once
+# Geofabrik's *-latest links can redirect-loop; use a dated file from the
+# region's page, e.g. https://download.geofabrik.de/north-america/us/california.html
+curl -o tools/osm/california-260929.osm.pbf \
+    https://download.geofabrik.de/north-america/us/california-260929.osm.pbf
+tools/.venv/bin/python tools/gen_static.py \
+    --pbf tools/osm/california-260929.osm.pbf --out tools/static_out
+```
+
+Every tile is capped at `--max-bytes` (default 4500, just above the largest
+bundled tile that is known to run on-device). Over-cap tiles, mostly lake
+country, are degraded: fewer labels, then coarser simplification, then the
+smallest water features, then the smallest roads. The run prints how many tiles
+needed each step.
+
+State extracts end at the state line, so tiles straddling a border only contain
+that state's half. Generating neighbouring states separately and copying the
+results into one folder means the last one wins on those tiles. For multi-state
+coverage, generate from one combined extract (e.g. `us-west`) instead.
+
+## Pipeline (small curated regions via Overpass)
 
 1. **Pick the regions** you want to offer (the catalog) and generate tiles for
    each into one output folder. The generator already writes per-tile JSON to

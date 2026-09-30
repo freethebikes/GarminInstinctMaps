@@ -21,6 +21,8 @@ Usage:
       --tile-deg 0.05 --simplify-m 25
 
   python3 tools/gen_tiles.py --input region.geojson --tile-deg 0.05   # offline
+  tools/.venv/bin/python tools/gen_tiles.py --pbf tools/osm/california-*.osm.pbf \
+      --bbox 33.9 -119.95 34.5 -118.6                                  # offline
 """
 
 import argparse
@@ -44,6 +46,15 @@ OVERPASS_URLS = [
 ]
 
 SCALE = 100000  # integer units per degree (~1.1 m at the equator for lat)
+
+# Every tile set (bundled, hosted, dev server) shares ONE world-anchored grid,
+# so tile (ix, iy) means the same place no matter which region was generated.
+# Anchoring at the SW corner of the world keeps every index >= 0.
+GRID_LAT0 = -90.0
+GRID_LON0 = -180.0
+
+# Per-tile JSON cap. The largest tile validated on a real device was ~4.2 KB.
+MAX_TILE_BYTES = 4500
 
 
 # --------------------------------------------------------------------------
@@ -199,12 +210,10 @@ def simplify(pts, tol_m):
 # --------------------------------------------------------------------------
 
 class Grid:
-    def __init__(self, min_lat, min_lon, tile_deg):
+    def __init__(self, tile_deg):
         self.tile_deg = tile_deg
-        # Anchor the grid below/left of the actual data extent so every tile
-        # index is >= 0 (lets the watch use a cheap truncating tileX/tileY).
-        self.lat0 = math.floor(min_lat / tile_deg) * tile_deg
-        self.lon0 = math.floor(min_lon / tile_deg) * tile_deg
+        self.lat0 = GRID_LAT0
+        self.lon0 = GRID_LON0
 
     @classmethod
     def from_origin(cls, lat0, lon0, tile_deg):
@@ -266,44 +275,126 @@ def polyline_len_m(pts):
     return total
 
 
-def build_tiles(features, grid, tol_m, max_labels):
-    # labels are collected with a priority so we can keep only the most
-    # prominent few per tile (the screen can't show more anyway).
-    tiles = {}  # (ix,iy) -> {"lines": [...], "labels": [(prio, entry), ...]}
+def extent_m(pts):
+    lats = [p[0] for p in pts]
+    lons = [p[1] for p in pts]
+    mlon = 111320.0 * math.cos(math.radians(lats[0]))
+    return max((max(lats) - min(lats)) * 111320.0,
+               (max(lons) - min(lons)) * mlon)
+
+
+def is_tiny_pond(cls, pts, tol_m):
+    """Ponds smaller than the simplification tolerance collapse to a
+    meaningless 2-3 point squiggle. Only closed rings: rivers are split into
+    short ways at every bridge and must stay connected."""
+    return cls == CLS_WATER and pts[0] == pts[-1] and extent_m(pts) < 2 * tol_m
+
+
+def add_feature(tiles, grid, cls, name, pts, tol_m):
+    """Simplifies one feature and appends its per-tile runs (and its label, with
+    a prominence priority) to `tiles`: (ix,iy) -> {"lines", "labels"}.
+    Returns False if the feature was dropped."""
+    if is_tiny_pond(cls, pts, tol_m):
+        return False
+    simp = simplify(pts, tol_m)
+    if len(simp) < 2:
+        return False
 
     def tile(ix, iy):
         return tiles.setdefault((ix, iy), {"lines": [], "labels": []})
 
-    for cls, name, pts in features:
-        simp = simplify(pts, tol_m)
-        if len(simp) < 2:
+    for ix, iy, run in split_by_tile(simp, grid):
+        if len(run) < 2:
             continue
-        for ix, iy, run in split_by_tile(simp, grid):
-            if len(run) < 2:
-                continue
-            origin = grid.origin(ix, iy)
-            tile(ix, iy)["lines"].append([cls] + quantize(run, origin))
-        if name:
-            mid = simp[len(simp) // 2]
-            ix, iy = grid.ix(mid[1]), grid.iy(mid[0])
-            x, y = quantize([mid], grid.origin(ix, iy))
-            prio = polyline_len_m(simp)
-            tile(ix, iy)["labels"].append((prio, [cls, x, y, name]))
+        tile(ix, iy)["lines"].append([cls] + quantize(run, grid.origin(ix, iy)))
+    if name:
+        mid = simp[len(simp) // 2]
+        ix, iy = grid.ix(mid[1]), grid.iy(mid[0])
+        x, y = quantize([mid], grid.origin(ix, iy))
+        tile(ix, iy)["labels"].append((polyline_len_m(simp), [cls, x, y, name]))
+    return True
 
-    # keep the top-N labels per tile by prominence, then drop the priority.
-    for t in tiles.values():
-        t["labels"].sort(key=lambda pe: pe[0], reverse=True)
-        t["labels"] = [entry for _, entry in t["labels"][:max_labels]]
+
+def build_tiles(features, grid, tol_m):
+    tiles = {}
+    for cls, name, pts in features:
+        add_feature(tiles, grid, cls, name, pts, tol_m)
     return tiles
 
 
-def build_overview(features, grid, base_tol_m, region_w_m, max_labels,
+# Degradation ladder for over-cap tiles: (max labels, simplify tolerance m).
+LADDER = [(6, None), (3, 100.0), (3, 200.0), (0, 400.0)]
+STEP_DROPPED = len(LADDER) + 1   # had to drop whole features
+STEP_OVER = len(LADDER) + 2      # still over the cap (coastline alone too big)
+
+
+def dump(obj):
+    return json.dumps(obj, separators=(",", ":"))
+
+
+def dequantize(line, origin):
+    lat0, lon0 = origin
+    return [(lat0 + line[i + 1] / SCALE, lon0 + line[i] / SCALE)
+            for i in range(1, len(line), 2)]
+
+
+def fit_tile(obj, origin, max_bytes):
+    """Returns (json_text, degrade_step) with the tile under max_bytes. The
+    watch parses a whole tile into its 96 KB heap and holds up to 3x3 of them,
+    so one dense (lake-country) tile can crash it. Degrades in steps: fewer
+    labels -> coarser simplification -> drop smallest water, then roads."""
+    text = dump(obj)
+    if len(text) <= max_bytes:
+        return text, 0
+    lines, labels = obj["lines"], obj["labels"]
+    for step, (max_labels, tol) in enumerate(LADDER, start=1):
+        labels = labels[:max_labels]
+        if tol is not None:
+            out = []
+            for ln in lines:
+                simp = simplify(dequantize(ln, origin), tol)
+                if len(simp) >= 2 and extent_m(simp) >= tol:
+                    out.append([ln[0]] + quantize(simp, origin))
+            lines = out
+        text = dump(dict(obj, lines=lines, labels=labels))
+        if len(text) <= max_bytes:
+            return text, step
+    for cls in (CLS_WATER, CLS_ROAD):
+        victims = sorted((ln for ln in lines if ln[0] == cls),
+                         key=lambda ln: polyline_len_m(dequantize(ln, origin)))
+        drop = set()
+        for ln in victims:
+            drop.add(id(ln))
+            text = dump(dict(obj, lines=[l for l in lines if id(l) not in drop],
+                             labels=labels))
+            if len(text) <= max_bytes:
+                return text, STEP_DROPPED
+        lines = [l for l in lines if id(l) not in drop]
+    return dump(dict(obj, lines=lines, labels=labels)), STEP_OVER
+
+
+def tile_json(grid, ix, iy, t, max_labels, max_bytes):
+    """Final JSON text for one tile: top-N labels by prominence, size-capped.
+    Returns (text, degrade_step)."""
+    lat0, lon0 = grid.origin(ix, iy)
+    labels = sorted(t["labels"], key=lambda pe: pe[0], reverse=True)
+    obj = {
+        "lat0": round(lat0, 6),
+        "lon0": round(lon0, 6),
+        "sc": SCALE,
+        "lines": t["lines"],
+        "labels": [e for _, e in labels[:max_labels]],
+    }
+    return fit_tile(obj, (lat0, lon0), max_bytes)
+
+
+def build_overview(features, origin, base_tol_m, region_w_m, max_labels,
                    budget=1400):
     """A single, heavily-simplified layer covering the whole region, shown when
     zoomed out. It must stay small in RAM (it's always resident), so the
     simplification tolerance scales with how wide the region is (~1 screen pixel)
-    and is raised further until the point count fits `budget`."""
-    origin = (grid.lat0, grid.lon0)
+    and is raised further until the point count fits `budget`. `origin` is the
+    region's SW corner, which keeps the quantized ints small."""
     # ~1 px on a 176 px screen, with headroom; never finer than the detail tol.
     tol = max(base_tol_m, region_w_m / 176.0 * 1.3)
     min_len = tol * 3.0
@@ -333,15 +424,16 @@ def build_overview(features, grid, base_tol_m, region_w_m, max_labels,
     labels.sort(key=lambda pe: pe[0], reverse=True)
     labels = [e for _, e in labels[:max_labels]]
     return {
-        "lat0": round(grid.lat0, 6),
-        "lon0": round(grid.lon0, 6),
+        "lat0": round(origin[0], 6),
+        "lon0": round(origin[1], 6),
         "sc": SCALE,
         "lines": lines,
         "labels": labels,
     }
 
 
-def write_outputs(tiles, grid, overview, project_root, roads, simplify_m):
+def write_outputs(tiles, grid, overview, project_root, roads, simplify_m,
+                  max_labels, max_bytes, bbox):
     data_dir = os.path.join(project_root, "resources", "tiles_data")
     os.makedirs(data_dir, exist_ok=True)
 
@@ -352,20 +444,21 @@ def write_outputs(tiles, grid, overview, project_root, roads, simplify_m):
 
     entries = []
     syms = []
-    populated = sorted(k for k, v in tiles.items() if v["lines"] or v["labels"])
+    # Ways that touch the bbox run on past it; only bundle tiles inside it.
+    s, w, n, e = bbox
+    ix0, ix1 = grid.ix(w), grid.ix(e)
+    iy0, iy1 = grid.iy(s), grid.iy(n)
+    populated = sorted(k for k, v in tiles.items()
+                       if (v["lines"] or v["labels"])
+                       and ix0 <= k[0] <= ix1 and iy0 <= k[1] <= iy1)
+    degraded = 0
     for ix, iy in populated:
-        t = tiles[(ix, iy)]
-        lat0, lon0 = grid.origin(ix, iy)
-        obj = {
-            "lat0": round(lat0, 6),
-            "lon0": round(lon0, 6),
-            "sc": SCALE,
-            "lines": t["lines"],
-            "labels": t["labels"],
-        }
+        text, step = tile_json(grid, ix, iy, tiles[(ix, iy)], max_labels,
+                               max_bytes)
+        degraded += step > 0
         fname = f"tile_{ix}_{iy}.json"
         with open(os.path.join(data_dir, fname), "w") as f:
-            json.dump(obj, f, separators=(",", ":"))
+            f.write(text)
         rid = f"Tile_{ix}_{iy}"
         entries.append(f'    <jsonData id="{rid}" filename="tiles_data/{fname}"/>')
         syms.append(f'        "{ix}_{iy}" => Rez.JsonData.{rid},')
@@ -384,7 +477,7 @@ def write_outputs(tiles, grid, overview, project_root, roads, simplify_m):
         json.dump({"lat0": round(grid.lat0, 6), "lon0": round(grid.lon0, 6),
                    "tile_deg": grid.tile_deg, "scale": SCALE,
                    "roads": roads, "simplify_m": simplify_m,
-                   "max_labels": 12}, f, indent=2)
+                   "max_labels": max_labels}, f, indent=2)
 
     # centre of the populated area -> default HOME on the watch
     cxs = [ix for ix, iy in populated]
@@ -442,9 +535,10 @@ module TileIndex {{
     with open(os.path.join(project_root, "source", "TileIndex.mc"), "w") as f:
         f.write(idx)
 
-    total_lines = sum(len(t["lines"]) for t in tiles.values())
-    total_pts = sum(sum((len(l) - 1) // 2 for l in t["lines"]) for t in tiles.values())
-    print(f"  tiles populated : {len(populated)}")
+    total_lines = sum(len(tiles[k]["lines"]) for k in populated)
+    total_pts = sum(sum((len(l) - 1) // 2 for l in tiles[k]["lines"])
+                    for k in populated)
+    print(f"  tiles populated : {len(populated)} ({degraded} size-capped)")
     print(f"  polylines       : {total_lines}")
     print(f"  points (total)  : {total_pts}")
     print(f"  home (centre)   : {clat:.5f}, {clon:.5f}")
@@ -458,12 +552,16 @@ def main():
                     metavar=("S", "W", "N", "E"),
                     help="south west north east (lat lon lat lon)")
     ap.add_argument("--input", help="local GeoJSON instead of Overpass")
+    ap.add_argument("--pbf", help="local OSM .pbf extract instead of Overpass "
+                    "(needs pyosmium: run with tools/.venv/bin/python)")
     ap.add_argument("--tile-deg", type=float, default=0.05)
     ap.add_argument("--simplify-m", type=float, default=35.0)
     ap.add_argument("--roads", default="motorway|trunk|primary",
                     help="Overpass highway regex (major roads only by default)")
     ap.add_argument("--max-labels", type=int, default=40,
                     help="max labels kept per tile (by prominence)")
+    ap.add_argument("--max-bytes", type=int, default=MAX_TILE_BYTES,
+                    help="per-tile JSON size cap (see fit_tile)")
     ap.add_argument("--out", default=os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), help="project root")
     args = ap.parse_args()
@@ -475,6 +573,12 @@ def main():
             lats = [p[0] for _, _, pts in feats for p in pts]
             lons = [p[1] for _, _, pts in feats for p in pts]
             args.bbox = [min(lats), min(lons), max(lats), max(lons)]
+    elif args.pbf:
+        if not args.bbox:
+            ap.error("--bbox is required with --pbf")
+        import osm_pbf
+        print(f"Reading {args.pbf} for bbox {args.bbox} ...")
+        feats = list(osm_pbf.features_from_pbf(args.pbf, args.roads, args.bbox))
     else:
         if not args.bbox:
             ap.error("--bbox is required unless --input is given")
@@ -486,17 +590,19 @@ def main():
         raise SystemExit("No features found for this area/filters.")
     min_lat = min(p[0] for _, _, pts in feats for p in pts)
     min_lon = min(p[1] for _, _, pts in feats for p in pts)
-    grid = Grid(min_lat, min_lon, args.tile_deg)
-    tiles = build_tiles(feats, grid, args.simplify_m, args.max_labels)
+    grid = Grid(args.tile_deg)
+    tiles = build_tiles(feats, grid, args.simplify_m)
     max_lat = max(p[0] for _, _, pts in feats for p in pts)
     max_lon = max(p[1] for _, _, pts in feats for p in pts)
     mid_lat = (min_lat + max_lat) / 2.0
     region_w_m = (max_lon - min_lon) * 111320.0 * math.cos(math.radians(mid_lat))
-    overview = build_overview(feats, grid, max(args.simplify_m * 5.0, 150.0),
+    overview = build_overview(feats, (min_lat, min_lon),
+                              max(args.simplify_m * 5.0, 150.0),
                               region_w_m, 20)
     ov_pts = sum((len(l) - 1) // 2 for l in overview["lines"])
     print(f"  overview points : {ov_pts} ({len(overview['lines'])} lines)")
-    write_outputs(tiles, grid, overview, args.out, args.roads, args.simplify_m)
+    write_outputs(tiles, grid, overview, args.out, args.roads, args.simplify_m,
+                  args.max_labels, args.max_bytes, args.bbox)
     print("Done.")
 
 

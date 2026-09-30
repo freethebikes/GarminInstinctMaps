@@ -58,18 +58,12 @@ def make_tile(ix, iy):
             lat0 + td + MARGIN_DEG, lon0 + td + MARGIN_DEG)
     feats = list(gt.features_from_overpass(
         gt.fetch_overpass(bbox, CFG["roads"])))
-    tiles = gt.build_tiles(feats, GRID, CFG["simplify_m"], CFG["max_labels"])
+    tiles = gt.build_tiles(feats, GRID, CFG["simplify_m"])
     t = tiles.get((ix, iy), {"lines": [], "labels": []})
-    obj = {
-        "lat0": round(lat0, 6),
-        "lon0": round(lon0, 6),
-        "sc": CFG["scale"],
-        "lines": t["lines"],
-        "labels": t["labels"],
-    }
+    text, _ = gt.tile_json(GRID, ix, iy, t, CFG["max_labels"], gt.MAX_TILE_BYTES)
     with open(cache, "w") as f:
-        json.dump(obj, f, separators=(",", ":"))
-    return obj
+        f.write(text)
+    return json.loads(text)
 
 
 class Handler(BaseHTTPRequestHandler):
