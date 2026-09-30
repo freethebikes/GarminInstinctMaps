@@ -33,8 +33,9 @@ python3 -m venv tools/.venv && tools/.venv/bin/pip install osmium   # once
 # region's page, e.g. https://download.geofabrik.de/north-america/us/california.html
 curl -o tools/osm/california-260929.osm.pbf \
     https://download.geofabrik.de/north-america/us/california-260929.osm.pbf
-tools/.venv/bin/python tools/gen_static.py \
-    --pbf tools/osm/california-260929.osm.pbf --out tools/static_out
+tools/.venv/bin/python tools/gen_static.py --fresh \
+    --pbf tools/osm/california-260929.osm.pbf
+# -> tools/static_out/ (servable). Copy into site/tiles/ and push to publish.
 ```
 
 Every tile is capped at `--max-bytes` (default 4500, just above the largest
@@ -43,10 +44,25 @@ country, are degraded: fewer labels, then coarser simplification, then the
 smallest water features, then the smallest roads. The run prints how many tiles
 needed each step.
 
-State extracts end at the state line, so tiles straddling a border only contain
-that state's half. Generating neighbouring states separately and copying the
-results into one folder means the last one wins on those tiles. For multi-state
-coverage, generate from one combined extract (e.g. `us-west`) instead.
+### Several extracts (e.g. the whole US)
+
+The full US extract (11 GB) is too big for this disk, so process Geofabrik's
+regional extracts one at a time: download, add, delete. Each run adds *raw*
+(uncapped) tiles to `tools/static_raw/`, merging with tiles already there, so
+tiles on a border between two extracts end up with both sides. The size cap
+is applied once, at the end:
+
+```bash
+tools/.venv/bin/python tools/gen_static.py --fresh --no-finalize \
+    --pbf tools/osm/us-west-<YYMMDD>.osm.pbf        # first one: --fresh
+tools/.venv/bin/python tools/gen_static.py --no-finalize \
+    --pbf tools/osm/us-south-<YYMMDD>.osm.pbf       # ...more regions
+tools/.venv/bin/python tools/gen_static.py          # finalize -> static_out
+```
+
+Rough sizes (measured on CA / OH / MN): 17-44 KB of tiles per 1,000 km^2, so
+~190-300 MB for the lower 48. Processing runs at ~6-13 MB of .pbf per second;
+a region needs about 3x its .pbf size in RAM.
 
 ## Pipeline (small curated regions via Overpass)
 

@@ -10,6 +10,7 @@ tools/server_cache/
 # OSM .pbf extracts, gen_static.py output, pyosmium venv
 tools/osm/
 tools/static_out/
+tools/static_raw/
 tools/.venv/
 
 # Local Claude Code / editor config
