@@ -15,17 +15,20 @@ major roads around your GPS position.
 The Garmin Instinct has excellent GPS but no built-in maps. Simple Offline Maps fills that
 gap with lightweight vector maps: it draws coastlines, water and major roads as
 crisp lines around your live GPS position, so you can see where you are in
-relation to the landscape — entirely offline.
+relation to the landscape — offline once the map is on your watch.
 
-Coverage: **the Santa Barbara Channel coast (Santa Barbara to Malibu)** — bundled into the app, so no phone, signal or data
-connection is needed.
+Coverage:
+- **All of California**: download the area around you (about 15 km across)
+  through your phone while it's connected, then use it offline.
+- **Santa Barbara to Malibu** comes built into the app, so it works with no
+  phone, signal or download at all.
 
 Features
 - Coastline, water and major-road outlines from OpenStreetMap
 - Your live GPS position, with button pan / tilt / zoom (hold to accelerate)
 - Place and street labels that appear as you zoom in
-- A whole-region overview when zoomed out, full detail when zoomed in
-- 100% offline — nothing is transmitted
+- "Download area" from the menu saves the map around you for offline use
+- Works offline once downloaded; no account, no tracking
 
 Controls
 - MENU / ABC — move or zoom (hold to accelerate)
@@ -43,4 +46,5 @@ available under the Open Database License (ODbL).
 ---
 
 **What's new (v1.0):**
-First release. Offline vector maps for the Santa Barbara Channel coast (Santa Barbara to Malibu) on the Instinct family.
+First release. Offline vector maps for the Instinct family: Santa Barbara to
+Malibu built in, and downloadable maps for all of California.

@@ -15,16 +15,18 @@ off the device, sent to us or to any third party, or used for any other purpose.
 
 Simple Offline Maps can download additional map tiles over the internet (relayed through
 your phone) to extend coverage, and caches them on your device for offline use.
-Only requests for public map tiles are made — your location and any personal
-data are never transmitted. The tiles are static, OpenStreetMap-derived files
-served from a content host; no information about you is sent with the request
-beyond what any web request includes (e.g. your device's IP address, which the
-host may log).
+Only requests for public map tiles are made. Your exact GPS position and any
+personal data are never transmitted, but each request names the map tile it
+needs, and a tile covers an area of roughly 5 km, so the host can infer the
+general area you are viewing. The tiles are static, OpenStreetMap-derived files
+served from GitHub Pages; beyond the tile name, no information about you is
+sent with the request other than what any web request includes (e.g. your
+device's IP address, which the host may log).
 
 ## Data we collect
 
 None. Simple Offline Maps has no analytics, no accounts, and no servers that receive your
-data. Map data is bundled with the app and derived from OpenStreetMap
+data. Map data is bundled with the app or downloaded as above, and derived from OpenStreetMap
 (© OpenStreetMap contributors, ODbL).
 
 ## Contact
